@@ -4,8 +4,6 @@
 
 #include "main.h"
 
-
-
 int sp(char* lstr, int n, int r) {
     int d = 0;
     int i;
@@ -38,6 +36,7 @@ int isl(char* lstr) {
     return !strncmp(lstr,LAMBDA,strlen(LAMBDA));
 }
 
+
 // first we need to parse the lambda string into a structured form
 struct lambda* parse(char* lstr, int n) {
 
@@ -53,8 +52,6 @@ struct lambda* parse(char* lstr, int n) {
     // p < n  -> (expr) expr ou (expr) expr expr
     // p == 0 -> expr (?expr)
     struct lambda* ex = calloc(1, sizeof(struct lambda));
-    // give it a unique id
-    ex->uid = rand() / 10000000;
 
 
     if (isl(lstr)) {
@@ -156,28 +153,25 @@ int* tags(struct lambda* l) {
     return t;
 }
 
-
-
-
-// replace all instances of a variable with a lambda expression
-int replace(struct lambda* l, struct lambda* x, int d) {
+int move(struct lambda* l, int d, int r) {
     switch (l->t) {
         case VAR:
-            //printf("'%c' == '%c'\n",l->tag,d);
-            if (l->tag == d) *l = *x;
+            if (l->tag == d) {
+                l->tag = r;
+                return 1;
+            }
             return 0;
         case APP:
-            replace(l->left, x,d);
-            replace(l->right, x,d);
+            move(l->left, d, r);
+            move(l->right, d, r);
             return 1;
         case DEF:
-            // TODO: handle collisions
-            if (l->arg == d) l->arg = x->tag;
-            replace(l->body, x,d);
+            if (l->arg == d) {
+                l->arg = r;
+            }
+            move(l->body, d, r);
             return 1;
     }
-
-
 }
 
 // rename a variable in a lambda expression
@@ -216,11 +210,8 @@ int convert(struct lambda* a,struct lambda* b) {
     // replace all instances of a variable in a with the corresponding z
     for (int i = 0; i < 26; i++) {
         if (c[i]) {
-            struct lambda* na = calloc(1,sizeof(struct lambda));
-            na->t = VAR;
-            na->tag = z[k]+'a';
-            replace(a,na,i+'a');
-            free(na);
+            printf("'%c' -> '%c'\n",i+'a',z[k]+'a');
+            move(a,i+'a',z[k]+'a');
             k++;
         }
     }
@@ -234,11 +225,36 @@ int convert(struct lambda* a,struct lambda* b) {
     return 0;
 }
 
+
+
+
+// replace all instances of a variable with a lambda expression
+int replace(struct lambda* l, struct lambda* x, int d) {
+    switch (l->t) {
+        case VAR:
+            //printf("'%c' == '%c'\n",l->tag,d);
+            if (l->tag == d) *l = *x;
+            return 0;
+        case APP:
+            replace(l->left, x,d);
+            replace(l->right, x,d);
+            return 1;
+        case DEF:
+            // TODO: handle collisions
+            replace(l->body, x,d);
+            return 1;
+    }
+
+
+}
+
+
+
 // implement subsitution for a function in a lambda expression
 struct lambda* subst(struct lambda* l, struct lambda* x) {
-    if (l->t != DEF) return NULL;
-    //printf("Subst %s into %s\n",build(x),build(l));
-    convert(l,x);
+    printf("<====================>\n");
+    printf("Subst %s into %s (:%p:)\n",build(x),build(l),l);
+    //convert(l,x);
 
     // variable to replace
     int r = l->arg;
@@ -247,6 +263,9 @@ struct lambda* subst(struct lambda* l, struct lambda* x) {
     // replace all instances of r in x with b
     replace(b, x, r);
 
+    printf("Substituted: %s (:%p:)\n",build(b),b);
+    printf("<====================>\n");
+
     return b;
 }
 
@@ -254,27 +273,60 @@ struct lambda* subst(struct lambda* l, struct lambda* x) {
 // beta-reduce a lambda expression
 struct lambda* reduce(struct lambda* l) {
 
+    static int depth = 0;
+    depth++;
+
     if (l->t == DEF) {
+        // reduce deeper
+        //printf("deeper\n");
         l->body = reduce(l->body);
+        //printf("deeper reduced\n");
+        depth--;
+        printf("depth: %d\n",depth);
         return l;
     }
-    if (l->t == VAR) return l;
+    // If we found a variable, go back up
+    if (l->t == VAR) {
+        depth--;
+        printf("depth: %d\n",depth);
+        return l;
+    }
     
-
+    //printf("LEFT: %s (:%p:)\n", build(l->left), l->right);
     struct lambda* f = l->left;
+    // reducing the left side
     if (f->t == APP) f = reduce(f);
 
+    //printf("RIGHT %s (:%p:)\n", build(l->right), l->right);
     struct lambda* x = l->right;
+    // reducing the right side
     if (x->t == APP) x = reduce(x);
 
-    printf("reducing : %s (:%d:)\n", build(l), l->uid);
-    printf("    f: %s (:%d:)\n", build(f), f->uid);
-    printf("    x: %s (:%d:)\n", build(x), x->uid);
+    l = (struct lambda*)realloc(l, sizeof(struct lambda));
+    l->t = APP;
+    l->left = f;
+    l->right = x;
+
+    if (f->t != DEF) {
+        printf("depth: %d\n",depth);
+        depth--;
+        return l;
+    }
+
+
+    //printf("reducing : %s (:%p:)\n", build(l), l);
+    //printf("    f: %s (:%p:)\n", build(f), f);
+    //printf("    x: %s (:%p:)\n", build(x), x);
+    // if the left side is a lambda definition, substitute the right side
     struct lambda* b = subst(f, x);
-    if (b == NULL) return l;
+
+    //printf("reduced (%p): \n",b);
+    //visualize(b,0);
 
     b = reduce(b);
 
+    printf("depth: %d\n",depth);
+    depth--;
     return b;
 }
 

@@ -130,13 +130,19 @@ void test_reduce() {
         {"(λa.(λb.(ab)))(c)", "λb.(cb)"},               // reduction in outer lambda yields a lambda
         {"((λa.λb.(ab))(λc.(λd.(cd))))(λe.e)", "λd.d"}, // multi-step reduction with nested abstractions
         {"((λa.a)((λb.b)))", "λb.b"},                   // application with extra spaces and parentheses
+        {"(λa.λb.(b(a)))(λc.(cc))(λd.(d))", "λc.(cc)"}, // reduction with multiple arguments
+        {"(λa.λb.λc.abc)(λx.λy.x)(λz.z)(λw.w)","λz.z"},
+        {"(λm.λn.λf.λx.mf(nfx))(λa.λc.a(ac))(λb.λe.b(b(be)))", "λf.λx.(f)((f)((f)((f)((f)(x)))))"},
         {NULL, NULL}
     };
 
     for (int i = 0; cases[i].expr != NULL; i++) {
+        printf("---------------------------\n");
+        printf("expr: %s\n", cases[i].expr);
         struct lambda* l = parse(cases[i].expr, strlen(cases[i].expr));
         struct lambda* reduced = reduce(l);
         struct lambda* expected = parse(cases[i].expected, strlen(cases[i].expected));
+        printf("reduced: %s\n", build(reduced));
         assert(treequal(reduced, expected));
         free(reduced);
         free(expected);

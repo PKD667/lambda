@@ -6,8 +6,6 @@
 
 struct lambda {
 
-    int uid;
-
     union {
         struct {
             struct lambda* left; 

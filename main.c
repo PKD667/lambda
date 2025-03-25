@@ -3,7 +3,7 @@
 int main() {
     //char* expr = calloc(1024,1);
     //scanf("%s",expr);
-    char* expr = MUL TWO TWO;
+    char* expr = MUL "(λc.λd.c(cd))" "(λa.λb.a(ab))";
     printf("expr: %s\n",expr);
     struct lambda* l = parse(expr,strlen(expr));
     char* out = build(l);
