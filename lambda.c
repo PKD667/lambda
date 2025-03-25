@@ -3,7 +3,6 @@
 */
 
 #include "main.h"
-
 int sp(char* lstr, int n, int r) {
     int d = 0;
     int i;
@@ -35,6 +34,8 @@ int lsp(char* lstr, int n) {
 int isl(char* lstr) {
     return !strncmp(lstr,LAMBDA,strlen(LAMBDA));
 }
+
+
 
 
 // first we need to parse the lambda string into a structured form
@@ -88,6 +89,64 @@ return_free:
     return ex;
     
 }
+
+int treq(struct lambda* l1, struct lambda* l2) {
+    if (l1 == NULL && l2 == NULL) {
+        return 1;
+    }
+    if (l1 == NULL || l2 == NULL) {
+        return 0;
+    }
+    if (l1->t != l2->t) {
+        return 0;
+    }
+    switch (l1->t) {
+        case VAR: // VAR
+            return l1->tag == l2->tag;
+        case APP: // APP
+            return treq(l1->left, l2->left) && treq(l1->right, l2->right);
+        case DEF: // LAMBDA
+            return l1->arg == l2->arg && treq(l1->body, l2->body);
+    }
+}
+
+struct lambda* copy(struct lambda* l) {
+    struct lambda* n = calloc(1, sizeof(struct lambda));
+    n->t = l->t;
+    switch (l->t) {
+        case VAR:
+            n->tag = l->tag;
+            break;
+        case APP:
+            n->left = copy(l->left);
+            n->right = copy(l->right);
+            break;
+        case DEF:
+            n->arg = l->arg;
+            n->body = copy(l->body);
+            break;
+    }
+    return n;
+}
+
+int destroy(struct lambda* l) {
+    switch (l->t) {
+        case VAR:
+            free(l);
+            break;
+        case APP:
+            destroy(l->left);
+            destroy(l->right);
+            free(l);
+            break;
+        case DEF:
+            destroy(l->body);
+            free(l);
+            break;
+    }
+    return 0;
+}
+
 
 // build a lambda expression from a structured form
 char* build(struct lambda* l) {
@@ -146,7 +205,7 @@ void visualize(struct lambda* l,int d){
 
 int* tags(struct lambda* l) {
     char* str = build(l);
-    int* t = calloc(26, sizeof(int));
+    int* t = calloc(27, sizeof(int));
     for (int i = 0; i < strlen(str); i++) {
         if (isalpha(str[i]) && str[i+1]== '.' ) t[str[i]-'a'] = 1;
     }
@@ -172,6 +231,51 @@ int move(struct lambda* l, int d, int r) {
             move(l->body, d, r);
             return 1;
     }
+}
+
+int equal(struct lambda* a, struct lambda* b) {
+
+    struct lambda* be = copy(b);
+    convert(be, a);
+
+    // in order to do an extensive comparisoon
+    // we need to set the same variables
+    int* ta = tags(a);
+    int* tb = tags(be);
+
+    // if not the same number of vars, return false
+    int la = 0;
+    int lb = 0;
+
+    int* tbl = calloc(26, sizeof(int));
+    int* tal = calloc(26, sizeof(int));
+
+    for (int i = 0; i < 26; i++) {
+
+        if (tb[i]) tbl[lb] = i;
+        if (ta[i]) tal[la] = i;
+
+        la += ta[i];
+        lb += tb[i];
+    }
+    if (la != lb) return 0;
+
+    // move all tags in be by their corresponding tags in a
+    for (int i = 0; i < lb; i++) {
+        move(be,tbl[i]+'a',tal[i]+'a');
+    }
+    // now compare the tree
+    int r = treq(a,be);
+    if (!r) {
+        printf("a: %s\n",build(a));
+        printf("be: %s\n",build(be));
+    }
+    free(be);
+
+    free(ta);
+    free(tb);
+
+    return r;
 }
 
 // rename a variable in a lambda expression
@@ -229,23 +333,37 @@ int convert(struct lambda* a,struct lambda* b) {
 
 
 // replace all instances of a variable with a lambda expression
-int replace(struct lambda* l, struct lambda* x, int d) {
+struct lambda* replace(struct lambda* l, struct lambda* x, int d) {
+
+    struct lambda* n = calloc(1, sizeof(struct lambda));
+    n->t = l->t;
+
     switch (l->t) {
         case VAR:
             //printf("'%c' == '%c'\n",l->tag,d);
-            if (l->tag == d) *l = *x;
-            return 0;
+            if (l->tag == d) {
+                // replace
+                n = copy(x);
+            } else {
+                n->tag = l->tag;
+            }
+            break;
         case APP:
-            replace(l->left, x,d);
-            replace(l->right, x,d);
-            return 1;
+            n->left = replace(l->left, x,d);
+            n->right = replace(l->right, x,d);
+            break;
         case DEF:
             // TODO: handle collisions
-            replace(l->body, x,d);
-            return 1;
+            n->body = replace(l->body, x,d);
+            if (l->arg == d) {
+                n->arg = x->tag;
+            } else {
+                n->arg = l->arg;
+            }
+            break;
     }
 
-
+    return n;
 }
 
 
@@ -261,8 +379,7 @@ struct lambda* subst(struct lambda* l, struct lambda* x) {
     struct lambda* b = l->body;
 
     // replace all instances of r in x with b
-    replace(b, x, r);
-
+    b = replace(b,x,r);
     printf("Substituted: %s (:%p:)\n",build(b),b);
     printf("<====================>\n");
 
@@ -275,6 +392,10 @@ struct lambda* reduce(struct lambda* l) {
 
     static int depth = 0;
     depth++;
+
+    static struct lambda* root = NULL;
+    if (root == NULL) root = l;
+    printf("root : %s\n", build(root));
 
     if (l->t == DEF) {
         // reduce deeper
@@ -314,9 +435,9 @@ struct lambda* reduce(struct lambda* l) {
     }
 
 
-    //printf("reducing : %s (:%p:)\n", build(l), l);
-    //printf("    f: %s (:%p:)\n", build(f), f);
-    //printf("    x: %s (:%p:)\n", build(x), x);
+    printf("reducing : %s (:%p:)\n", build(l), l);
+    printf("    f: %s (:%p:)\n", build(f), f);
+    printf("    x: %s (:%p:)\n", build(x), x);
     // if the left side is a lambda definition, substitute the right side
     struct lambda* b = subst(f, x);
 

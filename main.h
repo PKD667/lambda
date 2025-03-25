@@ -5,7 +5,6 @@
 #include <ctype.h>
 
 struct lambda {
-
     union {
         struct {
             struct lambda* left; 
@@ -34,10 +33,14 @@ int rsp(char* lstr, int n);
 int lsp(char* lstr, int n);
 int isl(char* lstr);
 struct lambda* parse(char* lstr, int n);
+int treq(struct lambda* l1, struct lambda* l2);
+struct lambda* copy(struct lambda* l);
+int destroy(struct lambda* l);
 char* build(struct lambda* l);
 void visualize(struct lambda* l,int d);
+int equal(struct lambda* a, struct lambda* b);
 int* tags(struct lambda* l);
-int replace(struct lambda* l, struct lambda* x, int d);
+struct lambda* replace(struct lambda* l, struct lambda* x, int d);
 int convert(struct lambda* a, struct lambda* b);
 struct lambda* subst(struct lambda* l, struct lambda* x);
 struct lambda* reduce(struct lambda* l);
@@ -54,6 +57,8 @@ struct lambda* reduce(struct lambda* l);
 #define SIX "(λa.λb.a(a(a(a(a(ab))))))"
 #define SEVEN "(λa.λb.a(a(a(a(a(a(ab)))))))"
 #define EIGHT "(λa.λb.a(a(a(a(a(a(a(ab))))))))"
+#define NINE "(λa.λb.a(a(a(a(a(a(a(a(ab))))))))"
+#define TEN "(λa.λb.a(a(a(a(a(a(a(a(a(ab)))))))))"
 
 #define SUCC "(λn.λg.λt.g(ngt))"
 #define ADD "(λm.λn.λf.λx.mf(nfx))"

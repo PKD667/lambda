@@ -12,26 +12,6 @@
 // UTILS
 //--------
 
-int treequal(struct lambda* l1, struct lambda* l2) {
-    if (l1 == NULL && l2 == NULL) {
-        return 1;
-    }
-    if (l1 == NULL || l2 == NULL) {
-        return 0;
-    }
-    if (l1->t != l2->t) {
-        return 0;
-    }
-    switch (l1->t) {
-        case VAR: // VAR
-            return l1->tag == l2->tag;
-        case APP: // APP
-            return treequal(l1->left, l2->left) && treequal(l1->right, l2->right);
-        case DEF: // LAMBDA
-            return l1->arg == l2->arg && treequal(l1->body, l2->body);
-    }
-}
-
 void test_parse_and_build() {
     // Array of test lambda expressions.
     const char* tests[] = {
@@ -50,7 +30,7 @@ void test_parse_and_build() {
         char* rebuilt = build(l);
         // re parse
         struct lambda* l2 = parse(rebuilt, strlen(rebuilt));
-        assert(treequal(l, l2));
+        assert(treq(l, l2));
         free(rebuilt);
     }
 }
@@ -67,22 +47,30 @@ void test_tags() {
 }
 
 void test_replace() {
-    // Create a variable to be used as a replacement.
+    // Create a replacement lambda that is a variable 'y'
     struct lambda* replacement = calloc(1, sizeof(struct lambda));
-    replacement->t = 0; // VAR
+    replacement->t = VAR;
     replacement->tag = 'y';
-    
+
     // Create a lambda that is just a variable 'x'
     struct lambda* varExpr = calloc(1, sizeof(struct lambda));
-    varExpr->t = 0; // VAR
+    varExpr->t = VAR;
     varExpr->tag = 'x';
 
     // Replace 'x' with the replacement.
-    replace(varExpr, replacement, 'x');
-    assert(varExpr->tag == 'y');
-    
+    struct lambda* result = replace(varExpr, replacement, 'x');
+
+    // Create an expected lambda tree: a variable 'y'
+    struct lambda* expected = calloc(1, sizeof(struct lambda));
+    expected->t = VAR;
+    expected->tag = 'y';
+
+    // Use treq to check the result tree against the expected tree.
+    assert(treq(result, expected));
+
     free(replacement);
     free(varExpr);
+    free(expected);
 }
 
 void test_convert() {
@@ -97,7 +85,7 @@ void test_convert() {
     printf("rebuilt: %s\n", rebuilt);
     // The rebuilt expression should be "λb.b"
     struct lambda* expected = parse("λb.b", strlen("λb.b"));
-    assert(treequal(l1, expected));
+    assert(treq(l1, expected));
     free(rebuilt);
 }
 
@@ -143,11 +131,19 @@ void test_reduce() {
         struct lambda* reduced = reduce(l);
         struct lambda* expected = parse(cases[i].expected, strlen(cases[i].expected));
         printf("reduced: %s\n", build(reduced));
-        assert(treequal(reduced, expected));
+        assert(treq(reduced, expected));
         free(reduced);
         free(expected);
         
     }
+}
+
+void test_equal() {
+    struct lambda* a = parse("λa.a", strlen("λa.a"));
+    struct lambda* b = parse("λc.c", strlen("λc.c"));
+
+    // a and b are equivalent
+    assert(equal(a, b));
 }
 
 int main() {
