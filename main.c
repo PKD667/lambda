@@ -47,11 +47,12 @@ int sp(char* lstr, int n, int r) {
         }
         if (r) i-=1;
         else i+=1;
-    } while (d > 0 && i < n);
+    } while (d != 0 && i <= n);
 
     if (d != 0) return -1;
 
-    return i-1;
+    if (r) return n-i-1;
+    else return i-1;
 }
 
 int rsp(char* lstr, int n) {
@@ -69,7 +70,7 @@ int isl(char* lstr) {
 // first we need to parse the lambda string into a structured form
 struct lambda* parse(char* lstr, int n) {
 
-    printf("parse: %.*s\n",n,lstr);
+    printf("%.*s\n",n,lstr);
 
     int p = lsp(lstr,n);
     if (p + 1 == n && p != 0 ) {
@@ -91,33 +92,25 @@ struct lambda* parse(char* lstr, int n) {
     }
 
     if (n == 1) {
-        assert(isalpha(*lstr));
+        assert(isalnum(*lstr));
         ex->t = VAR;
         ex->tag = *(lstr);
         goto return_free;
     } 
 
-    if (p > 0) {
-        // right should be the rightmost expression
-        printf("right\n");
-        int rp = 0;
-        if (lstr[n] == ')') {
-            rp = rsp(lstr,n);
-            ex->right = parse(lstr+rp+1,n-rp-1);
-        } else {
-            ex->right = parse(lstr+n-1,1);
-            rp += 1;
-        }
-        printf("left\n");
-        // left should be the (expr) + any other expressions before the last one
-        ex->left = parse(lstr,n-rp);
-        ex->t = APP;
-        goto return_free;
+    int rp = 0;
+    printf("right\n");
+    if (lstr[n-1] == ')') {
+        rp = rsp(lstr,n);
+        ex->right = parse((lstr+n)-rp,rp);
+    } else {
+        ex->right = parse(lstr+n-1,1);
+        rp += 1;
     }
-   
+    printf("left\n");
+    // left should be the (expr) + any other expressions before the last one
+    ex->left = parse(lstr,n-rp);
     ex->t = APP;
-    ex->left = parse(lstr,1);
-    ex->right = parse(lstr+1,n-1);
 
 
 return_free:
@@ -125,19 +118,21 @@ return_free:
     
 }
 
-
-
+// build a lambda expression from a structured form
 char* build(struct lambda* l) {
     int a = 1024;
     char* s = calloc(a, 1);
-    s[0] = '(';
     if (l->t == APP) {
         char* sl = build(l->left);
         char* sr = build(l->right);
         if (strlen(sl) + strlen(sr) > a) 
             s = realloc(s, strlen(sl) + strlen(sr) + a);
+        strcat(s, "(");
         strcat(s, sl);
+        strcat(s, ")(");
         strcat(s, sr);
+        strcat(s, ")");
+        
         free(sl);
         free(sr);
     } else if (l->t == DEF) {
@@ -154,11 +149,11 @@ char* build(struct lambda* l) {
         strcat(s,(char*)&l->tag);
     }
 
-    strcat(s,")");
 
     return s;
 }
 
+// visualize the lambda expression as a tree
 void visualize(struct lambda* l,int d){
     for (int i = 0; i < d; i++) printf(" ");
     switch (l->t) {
@@ -171,18 +166,84 @@ void visualize(struct lambda* l,int d){
             break;
         case APP:
             printf("APP: \n");
-            visualize(l->right, d+1);
             visualize(l->left, d+1);
+            visualize(l->right, d+1);
             break;
     }
 
 }
 
+int* tags(struct lambda* l) {
+    char* str = build(l);
+    int* t = calloc(26, sizeof(int));
+    for (int i = 0; i < strlen(str); i++) {
+        if (isalpha(str[i]) && str[i+1]== '.' ) t[str[i]-'a'] = 1;
+    }
+    return t;
+}
+
+// rename a variable in a lambda expression
+int convert(struct lambda* a,struct lambda* b) {
+
+    int* ta = tags(a);
+    int* tb = tags(b);
+
+    int* c = calloc(26, sizeof(int));
+    int* d = calloc(26, sizeof(int));
+    int s = 0;
+    for (int i = 0; i < 26; i++) {
+        int p = ta[i] & tb[i];
+        if (p) s++;
+        if (p) printf("'%c' == '%c'\n",i+'a',i+'a');
+        c[i] = p;
+        int o = ta[i] | tb[i];
+        d[i] = o;
+    }
+
+    if (s == 0) return 0;
+
+    // find s zeros in d
+    int j = 0;
+    int* z = calloc(26, sizeof(int));
+    for (int i = 0; i < 26; i++) {
+        if (d[i] == 0) {
+            z[j] = i;
+            j++;
+        }
+    }
+
+    printf("s: %d\n",s);
+
+    int k = 0;
+    // replace all instances of a variable in a with the corresponding z
+    for (int i = 0; i < 26; i++) {
+        if (c[i]) {
+            char* astr = build(a);
+            // replace all instances of i in a with z[k]
+            for (int j = 0; j < strlen(astr); j++) {
+                if (astr[j] == i+'a') astr[j] = z[k]+'a';
+            }
+            struct lambda* na = parse(astr, strlen(astr));
+            *a = *na;
+            free(na);
+            k++;
+        }
+    }
+
+    free(c);
+    free(d);
+    free(z);
+    free(ta);
+    free(tb);
+    return 0;
+}
+
+
+// replace all instances of a variable with a lambda expression
 int replace(struct lambda* l, struct lambda* x, int d) {
-    visualize(l, 0);
     switch (l->t) {
         case VAR:
-            printf("'%c' == '%c'\n",l->tag,d);
+            //printf("'%c' == '%c'\n",l->tag,d);
             if (l->tag == d) *l = *x;
             return 0;
         case APP:
@@ -199,53 +260,75 @@ int replace(struct lambda* l, struct lambda* x, int d) {
 }
 
 // implement subsitution for a function in a lambda expression
-int subst(struct lambda* l, struct lambda* x) {
-    if (l->t != DEF) return 1;
+struct lambda* subst(struct lambda* l, struct lambda* x) {
+    if (l->t != DEF) return NULL;
+    //printf("Subst %s into %s\n",build(x),build(l));
+    convert(l,x);
 
     // variable to replace
     int r = l->arg;
     struct lambda* b = l->body;
 
     // replace all instances of r in x with b
-    return replace(b, x, r);
+    replace(b, x, r);
+
+    return b;
 }
 
+// beta-reduce a lambda expression
 int reduce(struct lambda* l) {
-    if (l->t != APP) return 1;
+    if (l->t == DEF) return reduce(l->body);
+    if (l->t == VAR)  return 0;
+    //printf("%s\n",build(l));
 
     struct lambda* f = l->left;
-    if (f->t != DEF) reduce(f);
+    if (f->t == APP) reduce(f);
 
     struct lambda* x = l->right;
+    if (x->t == APP) reduce(x);
 
-    subst(f, x);
 
-    *l = *f;
+
+    struct lambda* b = subst(f, x);
+    if (b == NULL) return 0;
+    //printf("%s\n",build(b));
+    reduce(b);
+    *l = *b;
+
 
     return 0;
 }
 
-#define TRUE "(λt.λf.t)"
-#define FALSE "(λt.λf.f)"
-#define AND "(λp.λq.pqp)"
-#define OR "(λp.λq.ppq)"
-#define NOT "(λp.λa.λb.pba)"
+
+#define ZERO "(λa.λb.b)"
+#define ONE "(λa.λb.ab)"
+#define TWO "(λa.λb.a(ab))"
+#define THREE "(λa.λb.a(a(ab)))"
+#define FOUR "(λa.λb.a(a(a(ab))))"
+#define FIVE "(λa.λb.a(a(a(a(ab)))))"
+#define SIX "(λa.λb.a(a(a(a(a(ab))))))"
+#define SEVEN "(λa.λb.a(a(a(a(a(a(ab)))))))"
+#define EIGHT "(λa.λb.a(a(a(a(a(a(a(ab))))))))"
+
+
+#define SUCC "(λn.λg.λt.g(ngt))"
+#define ADD "(λm.λn.λf.λx.mf(nfx))"
 
 
 
 int main() {
     //char* expr = calloc(1024,1);
     //scanf("%s",expr);
-    char* expr = TRUE "ab";
+    char* expr = ADD THREE THREE;
     printf("expr: %s\n",expr);
     struct lambda* l = parse(expr,strlen(expr));
     char* out = build(l);
     printf("out: %s\n",out);
     visualize(l, 0);
-    printf("reduce: %d\n",reduce(l));  
-    //visualize(l, 0);
+    reduce(l);
+    visualize(l, 0);
     char* new = build(l);
-    printf("%s\n",new);
+    printf("reduced: %s\n",new);
 
     return 0;
 }
