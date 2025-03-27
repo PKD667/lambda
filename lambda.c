@@ -3,6 +3,8 @@
 */
 
 #include "main.h"
+#include <string.h>
+
 int sp(char* lstr, int n, int r) {
     int d = 0;
     int i;
@@ -35,11 +37,30 @@ int isl(char* lstr) {
     return !strncmp(lstr,LAMBDA,strlen(LAMBDA));
 }
 
+char* unspace(char* lstr, int* n) {
+    char* s = calloc(strlen(lstr)+1,1);
+    int k = 0;
+    int j = 0;
+    for (int i = 0; i < strlen(lstr); i++) {
+        if (lstr[i] != ' ') {
+            s[j] = lstr[i];
+            j++;
+        } else {
+            k++;
+        }
+    }
+    if (j == strlen(lstr)) return lstr;
+    *n -= k;
+    return s;
 
+}
 
 
 // first we need to parse the lambda string into a structured form
 struct lambda* parse(char* lstr, int n) {
+
+    lstr = unspace(lstr,&n); 
+
 
     //printf("%.*s\n",n,lstr);
 
@@ -64,6 +85,7 @@ struct lambda* parse(char* lstr, int n) {
     }
 
     if (n == 1) {
+        //printf("'%c'\n",*lstr);
         assert(isalnum(*lstr));
         ex->t = VAR;
         ex->tag = *(lstr);
@@ -209,6 +231,7 @@ int* tags(struct lambda* l) {
     for (int i = 0; i < strlen(str); i++) {
         if (isalpha(str[i]) && str[i+1]== '.' ) t[str[i]-'a'] = 1;
     }
+    free(str);
     return t;
 }
 
@@ -237,6 +260,7 @@ int equal(struct lambda* a, struct lambda* b) {
 
     struct lambda* be = copy(b);
     convert(be, a);
+    struct lambda* bd = copy(be);
 
     // in order to do an extensive comparisoon
     // we need to set the same variables
@@ -254,7 +278,6 @@ int equal(struct lambda* a, struct lambda* b) {
 
         if (tb[i]) tbl[lb] = i;
         if (ta[i]) tal[la] = i;
-
         la += ta[i];
         lb += tb[i];
     }
@@ -267,13 +290,18 @@ int equal(struct lambda* a, struct lambda* b) {
     // now compare the tree
     int r = treq(a,be);
     if (!r) {
-        printf("a: %s\n",build(a));
-        printf("be: %s\n",build(be));
+        // move all tags in be by their corresponding tags in a
+        for (int i = 0; i < lb; i++) {
+            move(bd,tbl[lb-i-1]+'a',tal[i]+'a');
+        }
+        r = treq(a,bd);
     }
+
     free(be);
 
     free(ta);
     free(tb);
+
 
     return r;
 }
@@ -290,7 +318,6 @@ int convert(struct lambda* a,struct lambda* b) {
     for (int i = 0; i < 26; i++) {
         int p = ta[i] & tb[i];
         if (p) s++;
-        if (p) printf("'%c' == '%c'\n",i+'a',i+'a');
         c[i] = p;
         int o = ta[i] | tb[i];
         d[i] = o;
@@ -308,18 +335,18 @@ int convert(struct lambda* a,struct lambda* b) {
         }
     }
 
-    printf("s: %d\n",s);
+   //printf("s: %d\n",s);
 
     int k = 0;
     // replace all instances of a variable in a with the corresponding z
     for (int i = 0; i < 26; i++) {
         if (c[i]) {
-            printf("'%c' -> '%c'\n",i+'a',z[k]+'a');
+            //printf("'%c' -> '%c'\n",i+'a',z[k]+'a');
             move(a,i+'a',z[k]+'a');
             k++;
         }
     }
-    printf("converted: %s\n",build(a));
+    //printf("converted: %s\n",build(a));
 
     free(c);
     free(d);
@@ -395,7 +422,7 @@ struct lambda* reduce(struct lambda* l) {
 
     static struct lambda* root = NULL;
     if (root == NULL) root = l;
-    printf("root : %s\n", build(root));
+    //printf("root : %s\n", build(root));
 
     if (l->t == DEF) {
         // reduce deeper
@@ -403,13 +430,13 @@ struct lambda* reduce(struct lambda* l) {
         l->body = reduce(l->body);
         //printf("deeper reduced\n");
         depth--;
-        printf("depth: %d\n",depth);
+        //printf("depth: %d\n",depth);
         return l;
     }
     // If we found a variable, go back up
     if (l->t == VAR) {
         depth--;
-        printf("depth: %d\n",depth);
+        //printf("depth: %d\n",depth);
         return l;
     }
     
@@ -429,7 +456,7 @@ struct lambda* reduce(struct lambda* l) {
     l->right = x;
 
     if (f->t != DEF) {
-        printf("depth: %d\n",depth);
+        //printf("depth: %d\n",depth);
         depth--;
         return l;
     }
@@ -446,7 +473,7 @@ struct lambda* reduce(struct lambda* l) {
 
     b = reduce(b);
 
-    printf("depth: %d\n",depth);
+    //printf("depth: %d\n",depth);
     depth--;
     return b;
 }

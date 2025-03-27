@@ -139,11 +139,19 @@ void test_reduce() {
 }
 
 void test_equal() {
-    struct lambda* a = parse("λa.a", strlen("λa.a"));
-    struct lambda* b = parse("λc.c", strlen("λc.c"));
+    char* as = "(λm.λn.λf.m(nf))(λa.λb.a(a(a(ab))))(λa.λb.ab)";
+    struct lambda* a = parse(as, strlen(as));
+    char* bs = "(λe.λg.e(e(e(eg))))";
+    struct lambda* b = parse(bs, strlen(bs));
 
-    // a and b are equivalent
-    assert(equal(a, b));
+    // a and b should not be equal
+    assert(!equal(a, b));
+
+    // reduce a
+    struct lambda* ra = reduce(a);
+    // a and b should be equivalent
+    assert(equal(ra, b));
+
 }
 
 int main() {
@@ -153,6 +161,7 @@ int main() {
     test_convert();
     test_subst();
     test_reduce();
+    test_equal();
     printf("All tests passed.\n");
     return 0;
 }
